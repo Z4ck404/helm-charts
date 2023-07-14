@@ -1,0 +1,23 @@
+prometheus:
+  rbac: true
+  prometheusConfig: |
+    global:
+      scrape_interval: 5s
+      evaluation_interval: 5s
+      external_labels:
+        cluster: thanos-prometheus
+    remote_write:
+    - url: http://thanos-receive-service.{{ .Release.Namespace }}.svc.cluster.local:19291/api/v1/receive
+      metadata_config:
+        send: false
+    scrape_configs: []
+
+thanos: 
+  objectStore: |
+    type: s3
+    config:
+      endpoint: "s3.us-east-1.amazonaws.com"
+      bucket: ""
+      region: "us-east-1"
+      access_key: ""
+      secret_key: ""

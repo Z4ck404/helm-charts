@@ -1,0 +1,4 @@
+apiVersion: v2
+name: prometheus-thanos-charts
+description: prometheus with thanos sidecar
+version: 0.1.0

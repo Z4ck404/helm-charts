@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app: thanos-receiver
+  name: thanos-receiverr
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: thanos-receiver
+  serviceName: thanos-receiver-default
+  template:
+    metadata:
+      labels:
+        app: thanos-receiver
+    spec:
+      affinity: {}
+      containers:
+        - args:
+            - receive
+            - --objstore.config=$(OBJSTORE_CONFIG)
+            - --tsdb.path=/var/thanos/receive
+            - --label=receive_replica="$(NAME)"
+            - --grpc-address=0.0.0.0:10901
+            - --http-address=0.0.0.0:10902
+            - --remote-write.address=0.0.0.0:19291
+            - --receive.local-endpoint=127.0.0.1:10901
+            - --tsdb.retention=15d
+            - --receive.hashrings-file=/var/lib/thanos-receiver/hashrings.json
+          env:
+            - name: NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: OBJSTORE_CONFIG
+              valueFrom:
+                secretKeyRef:
+                  key: object-store.yaml
+                  name: thanos
+          image: quay.io/thanos/thanos:v0.15.0
+          livenessProbe:
+            failureThreshold: 8
+            httpGet:
+              path: /-/healthy
+              port: 10902
+              scheme: HTTP
+            periodSeconds: 30
+          name: thanos-receiver
+          ports:
+            - containerPort: 10901
+              name: grpc
+            - containerPort: 10902
+              name: http
+            - containerPort: 19291
+              name: remote-write
+          readinessProbe:
+            failureThreshold: 20
+            httpGet:
+              path: /-/ready
+              port: 10902
+              scheme: HTTP
+            periodSeconds: 5
+          terminationMessagePolicy: FallbackToLogsOnError
+          volumeMounts:
+            - mountPath: /var/thanos/receive
+              name: data
+              readOnly: false
+            - mountPath: /var/lib/thanos-receiver
+              name: hashring-config
+      terminationGracePeriodSeconds: 900
+      volumes:
+        - emptyDir: {}
+          name: data
+        - configMap:
+            name: thanos-recieve-hashring
+          name: hashring-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: thanos-receiver
+  name: thanos-receiver-service
+spec:
+  ports:
+  - name: grpc
+    port: 10901
+    targetPort: 10901
+  - name: http
+    port: 10902
+    targetPort: 10902
+  - name: remote-write
+    port: 19291
+    targetPort: 19291
+  selector:
+    app: thanos-receiver
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: thanos-recieve-hashring
+  labels:
+    name: thanos-recieve-hashring
+data:
+  hashrings.json: |-
+    [
+      {
+        "endpoints": [
+          "127.0.0.1:10901"
+        ]
+      }
+    ]
